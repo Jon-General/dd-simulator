@@ -18,6 +18,11 @@
 #include <nlohmann/json.hpp>
 #include <numeric>
 #include <string>
+#include <vector>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace dd {
 
@@ -29,9 +34,11 @@ UniqueTable::UniqueTable(MemoryManager& manager,
     stat.entrySize = sizeof(Bucket);
     stat.numBuckets = cfg.nBuckets;
   }
+  initializeLocks();
 }
 
 void UniqueTable::resize(const std::size_t nVars) {
+  std::unique_lock lock(tableMutex);
   cfg.nVars = nVars;
   tables.resize(nVars, Table(cfg.nBuckets));
   // TODO: if the new size is smaller than the old one we might have to
@@ -41,6 +48,7 @@ void UniqueTable::resize(const std::size_t nVars) {
     stat.entrySize = sizeof(Bucket);
     stat.numBuckets = cfg.nBuckets;
   }
+  initializeLocks();
 }
 
 bool UniqueTable::possiblyNeedsCollection() const {
@@ -48,72 +56,86 @@ bool UniqueTable::possiblyNeedsCollection() const {
 }
 
 std::size_t UniqueTable::garbageCollect(const bool force) {
-  const std::size_t numEntriesBefore = getNumEntries();
+  std::unique_lock lock(tableMutex);
+
+  const std::size_t numEntriesBefore = getNumEntriesLocked();
   if ((!force && numEntriesBefore < gcLimit) || numEntriesBefore == 0U) {
     return 0U;
   }
 
-  std::size_t v = 0U;
-  for (auto& table : tables) {
+  std::size_t totalCollected = 0U;
+
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:totalCollected) default(none)          \
+    shared(tables, stats, memoryManager)
+#endif
+  for (std::size_t v = 0; v < tables.size(); ++v) {
+    auto& table = tables[v];
     auto& stat = stats[v];
     ++stat.gcRuns;
+    std::size_t removed = 0U;
     for (auto& bucket : table) {
-      NodeBase* p = bucket;
-      NodeBase* lastp = nullptr;
-      while (p != nullptr) {
-        if (!p->isMarked()) {
-          NodeBase* next = p->next();
-          if (lastp == nullptr) {
+      NodeBase* current = bucket;
+      NodeBase* previous = nullptr;
+      while (current != nullptr) {
+        if (!current->isMarked()) {
+          NodeBase* next = current->next();
+          if (previous == nullptr) {
             bucket = next;
           } else {
-            lastp->setNext(next);
+            previous->setNext(next);
           }
-          memoryManager->returnEntry(*p);
-          p = next;
-          --stat.numEntries;
+          memoryManager->returnEntry(*current);
+          current = next;
+          ++removed;
         } else {
-          lastp = p;
-          p = p->next();
+          previous = current;
+          current = current->next();
         }
       }
     }
-    ++v;
+    stat.numEntries -= removed;
+    totalCollected += removed;
   }
 
-  // The garbage collection limit changes dynamically depending on the number
-  // of remaining (active) nodes. If it were not changed, garbage collection
-  // would run through the complete table on each successive call once the
-  // number of remaining entries reaches the garbage collection limit. It is
-  // increased whenever the number of remaining entries is rather close to the
-  // garbage collection threshold and decreased if the number of remaining
-  // entries is much lower than the current limit.
-  const auto numEntries = getNumEntries();
+  const auto numEntries = numEntriesBefore - totalCollected;
   if (numEntries > gcLimit / 10 * 9) {
     gcLimit = numEntries + cfg.initialGCLimit;
   }
-  return numEntriesBefore - numEntries;
+  return totalCollected;
 }
 
 void UniqueTable::clear() {
-  // clear unique table buckets
+  std::unique_lock lock(tableMutex);
   for (auto& table : tables) {
-    for (auto& bucket : table) {
-      bucket = nullptr;
-    }
+    std::fill(table.begin(), table.end(), nullptr);
   }
   gcLimit = cfg.initialGCLimit;
-  for (auto& stat : stats) {
-    stat.reset();
+  for (std::size_t v = 0; v < stats.size(); ++v) {
+    if (v < statsLocks.size() && statsLocks[v] != nullptr) {
+      std::lock_guard<std::mutex> statsGuard(*statsLocks[v]);
+      stats[v].reset();
+      stats[v].gcRuns = 0U;
+    } else {
+      stats[v].reset();
+      stats[v].gcRuns = 0U;
+    }
   }
 };
 
-const UniqueTableStatistics&
+UniqueTableStatistics
 UniqueTable::getStats(const std::size_t idx) const noexcept {
+  std::shared_lock lock(tableMutex);
+  if (idx < statsLocks.size() && statsLocks[idx] != nullptr) {
+    std::lock_guard<std::mutex> guard(*statsLocks[idx]);
+    return stats.at(idx);
+  }
   return stats.at(idx);
 }
 
 nlohmann::basic_json<>
 UniqueTable::getStatsJson(const bool includeIndividualTables) const {
+  std::shared_lock lock(tableMutex);
   if (std::ranges::all_of(stats, [](const UniqueTableStatistics& stat) {
         return stat.peakNumEntries == 0U;
       })) {
@@ -121,24 +143,35 @@ UniqueTable::getStatsJson(const bool includeIndividualTables) const {
   }
 
   UniqueTableStatistics totalStats;
-  for (const auto& stat : stats) {
-    totalStats.entrySize = std::max(totalStats.entrySize, stat.entrySize);
-    totalStats.numBuckets += stat.numBuckets;
-    totalStats.numEntries += stat.numEntries;
-    totalStats.peakNumEntries += stat.peakNumEntries;
-    totalStats.collisions += stat.collisions;
-    totalStats.hits += stat.hits;
-    totalStats.lookups += stat.lookups;
-    totalStats.inserts += stat.inserts;
-    totalStats.gcRuns = std::max(totalStats.gcRuns, stat.gcRuns);
+  std::vector<UniqueTableStatistics> snapshots;
+  snapshots.reserve(stats.size());
+  for (std::size_t idx = 0; idx < stats.size(); ++idx) {
+    if (idx < statsLocks.size() && statsLocks[idx] != nullptr) {
+      std::lock_guard<std::mutex> guard(*statsLocks[idx]);
+      snapshots.push_back(stats[idx]);
+    } else {
+      snapshots.push_back(stats[idx]);
+    }
+  }
+
+  for (const auto& snapshot : snapshots) {
+    totalStats.entrySize = std::max(totalStats.entrySize, snapshot.entrySize);
+    totalStats.numBuckets += snapshot.numBuckets;
+    totalStats.numEntries += snapshot.numEntries;
+    totalStats.peakNumEntries += snapshot.peakNumEntries;
+    totalStats.collisions += snapshot.collisions;
+    totalStats.hits += snapshot.hits;
+    totalStats.lookups += snapshot.lookups;
+    totalStats.inserts += snapshot.inserts;
+    totalStats.gcRuns = std::max(totalStats.gcRuns, snapshot.gcRuns);
   }
 
   nlohmann::basic_json<> j;
   j["total"] = totalStats.json();
   if (includeIndividualTables) {
     std::size_t v = 0U;
-    for (const auto& stat : stats) {
-      j[std::to_string(v)] = stat.json();
+    for (const auto& snapshot : snapshots) {
+      j[std::to_string(v)] = snapshot.json();
       ++v;
     }
   }
@@ -146,27 +179,62 @@ UniqueTable::getStatsJson(const bool includeIndividualTables) const {
 }
 
 std::size_t UniqueTable::getNumEntries() const noexcept {
-  return std::accumulate(
-      stats.begin(), stats.end(), std::size_t{0},
-      [](const std::size_t& sum, const UniqueTableStatistics& stat) {
-        return sum + stat.numEntries;
-      });
+  std::shared_lock lock(tableMutex);
+  return getNumEntriesLocked();
 }
 
 std::size_t UniqueTable::countMarkedEntries() const noexcept {
+  std::shared_lock lock(tableMutex);
   std::size_t count = 0U;
-  for (const auto& table : tables) {
-    for (auto* bucket : table) {
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:count) default(none) shared(tables)
+#endif
+  for (std::size_t idx = 0; idx < tables.size(); ++idx) {
+    const auto& table = tables[idx];
+    std::size_t local = 0U;
+    for (const auto* bucket : table) {
       auto* p = bucket;
       while (p != nullptr) {
         if (p->isMarked()) {
-          ++count;
+          ++local;
         }
         p = p->next();
       }
     }
+    count += local;
   }
   return count;
 }
 
 } // namespace dd
+
+void dd::UniqueTable::initializeLocks() {
+  bucketLocks.clear();
+  bucketLocks.resize(cfg.nVars);
+  for (auto& locks : bucketLocks) {
+    locks.clear();
+    locks.reserve(cfg.nBuckets);
+    for (std::size_t key = 0; key < cfg.nBuckets; ++key) {
+      locks.emplace_back(std::make_unique<std::mutex>());
+    }
+  }
+
+  statsLocks.clear();
+  statsLocks.reserve(cfg.nVars);
+  for (std::size_t v = 0; v < cfg.nVars; ++v) {
+    statsLocks.emplace_back(std::make_unique<std::mutex>());
+  }
+}
+
+std::size_t dd::UniqueTable::getNumEntriesLocked() const noexcept {
+  std::size_t total = 0U;
+  for (std::size_t v = 0; v < stats.size(); ++v) {
+    if (v < statsLocks.size() && statsLocks[v] != nullptr) {
+      std::lock_guard<std::mutex> guard(*statsLocks[v]);
+      total += stats[v].numEntries;
+    } else {
+      total += stats[v].numEntries;
+    }
+  }
+  return total;
+}

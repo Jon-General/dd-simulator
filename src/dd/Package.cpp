@@ -50,9 +50,21 @@
 #include <utility>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace dd {
 Package::Package(const std::size_t nq, const DDPackageConfig& config)
     : nqubits(nq), config_(config) {
+#ifdef _OPENMP
+  omp_set_dynamic(0);
+  int requestedThreads = config_.ompThreads;
+  if (requestedThreads <= 0) {
+    requestedThreads = omp_get_num_procs();
+  }
+  omp_set_num_threads(std::max(1, requestedThreads));
+#endif
   resize(nq);
 }
 

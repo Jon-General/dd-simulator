@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <mutex>
 #include <type_traits>
 #include <vector>
 
@@ -151,6 +152,9 @@ private:
 
   /// The size of an entry in bytes (as reported by `sizeof`)
   size_t entrySize_;
+
+  /// Mutex protecting access to the underlying storage
+  mutable std::mutex mutex_{};
 
   /// A chunk of memory as a vector of bytes
   using Chunk = std::vector<std::byte>;

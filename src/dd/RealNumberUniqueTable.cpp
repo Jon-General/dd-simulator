@@ -23,6 +23,10 @@
 #include <limits>
 #include <ostream>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace dd {
 
 RealNumberUniqueTable::RealNumberUniqueTable(MemoryManager& manager,
@@ -65,9 +69,26 @@ RealNumber* RealNumberUniqueTable::lookupNonNegative(const fp val) {
     return &constants::sqrt2over2;
   }
 
-  ++stats.lookups;
-  const auto lowerKey = hash(val - RealNumber::eps);
-  const auto upperKey = hash(val + RealNumber::eps);
+  const auto lowerKeyRaw = hash(val - RealNumber::eps);
+  const auto upperKeyRaw = hash(val + RealNumber::eps);
+  const auto keyRaw = hash(val);
+  const auto lowerKey = static_cast<std::size_t>(lowerKeyRaw);
+  const auto upperKey = static_cast<std::size_t>(upperKeyRaw);
+  const auto key = static_cast<std::size_t>(keyRaw);
+
+  std::array<std::size_t, 3> keyCandidates{lowerKey, upperKey, key};
+  std::sort(keyCandidates.begin(), keyCandidates.end());
+  const auto last = std::unique(keyCandidates.begin(), keyCandidates.end());
+  std::array<std::unique_lock<std::mutex>, 3> bucketGuards;
+  std::size_t guardIdx = 0U;
+  for (auto it = keyCandidates.begin(); it != last; ++it) {
+    bucketGuards[guardIdx++] = std::unique_lock<std::mutex>(bucketLocks[*it]);
+  }
+
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    ++stats.lookups;
+  }
 
   if (upperKey == lowerKey) {
     return findOrInsert(lowerKey, val);
@@ -78,16 +99,14 @@ RealNumber* RealNumberUniqueTable::lookupNonNegative(const fp val) {
   // only the last entry in the lower bucket and the first entry in the upper
   // bucket need to be checked
 
-  const auto key = hash(val);
-
   RealNumber* pLower; // NOLINT(cppcoreguidelines-init-variables)
   RealNumber* pUpper; // NOLINT(cppcoreguidelines-init-variables)
   if (lowerKey != key) {
-    pLower = tailTable[static_cast<std::size_t>(lowerKey)];
-    pUpper = table[static_cast<std::size_t>(key)];
+    pLower = tailTable[lowerKey];
+    pUpper = table[key];
   } else {
-    pLower = tailTable[static_cast<std::size_t>(key)];
-    pUpper = table[static_cast<std::size_t>(upperKey)];
+    pLower = tailTable[key];
+    pUpper = table[upperKey];
   }
 
   const bool lowerMatchFound =
@@ -98,7 +117,10 @@ RealNumber* RealNumberUniqueTable::lookupNonNegative(const fp val) {
        RealNumber::approximatelyEquals(val, pUpper->value));
 
   if (lowerMatchFound && upperMatchFound) {
-    ++stats.hits;
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      ++stats.hits;
+    }
     const auto diffToLower = std::abs(pLower->value - val);
     const auto diffToUpper = std::abs(pUpper->value - val);
     // val is actually closer to p_lower than to p_upper
@@ -109,12 +131,18 @@ RealNumber* RealNumberUniqueTable::lookupNonNegative(const fp val) {
   }
 
   if (lowerMatchFound) {
-    ++stats.hits;
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      ++stats.hits;
+    }
     return pLower;
   }
 
   if (upperMatchFound) {
-    ++stats.hits;
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      ++stats.hits;
+    }
     return pUpper;
   }
 
@@ -128,22 +156,31 @@ RealNumber* RealNumberUniqueTable::lookupNonNegative(const fp val) {
 }
 
 bool RealNumberUniqueTable::possiblyNeedsCollection() const noexcept {
+  std::lock_guard<std::mutex> statsGuard(statsMutex);
   return stats.numEntries >= gcLimit;
 }
 
 std::size_t RealNumberUniqueTable::garbageCollect(const bool force) noexcept {
-  // nothing to be done if garbage collection is not forced, and the limit has
-  // not been reached, or the current count is minimal.
-  if ((!force && !possiblyNeedsCollection()) ||
-      stats.numEntries <= immortals::size()) {
-    return 0;
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    if ((!force && stats.numEntries < gcLimit) ||
+        stats.numEntries <= immortals::size()) {
+      return 0U;
+    }
+    ++stats.gcRuns;
   }
 
-  ++stats.gcRuns;
-  const auto before = stats.numEntries;
+  std::size_t collected = 0U;
+
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:collected) default(none)              \
+  shared(table, tailTable, bucketLocks, memoryManager)
+#endif
   for (std::size_t key = 0; key < table.size(); ++key) {
+    std::unique_lock<std::mutex> bucketGuard(bucketLocks[key]);
     RealNumber* curr = table[key];
     RealNumber* prev = nullptr;
+    std::size_t removedLocal = 0U;
     while (curr != nullptr) {
       if (!RealNumber::isImmortal(curr) && !RealNumber::isMarked(curr)) {
         RealNumber* next = curr->next();
@@ -154,40 +191,41 @@ std::size_t RealNumberUniqueTable::garbageCollect(const bool force) noexcept {
         }
         memoryManager->returnEntry(*curr);
         curr = next;
-        --stats.numEntries;
+        ++removedLocal;
       } else {
         prev = curr;
         curr = curr->next();
       }
-      tailTable[key] = prev;
     }
+    tailTable[key] = prev;
+    collected += removedLocal;
   }
 
-  // The garbage collection limit changes dynamically depending on the number
-  // of remaining (active) nodes. If it were not changed, garbage collection
-  // would run through the complete table on each successive call once the
-  // number of remaining entries reaches the garbage collection limit. It is
-  // increased whenever the number of remaining entries is rather close to the
-  // garbage collection threshold and decreased if the number of remaining
-  // entries is much lower than the current limit.
-  if (stats.numEntries > gcLimit / 10 * 9) {
-    gcLimit = stats.numEntries + initialGCLimit;
-  } else if (stats.numEntries < gcLimit / 128) {
-    gcLimit /= 2;
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    if (collected > 0U) {
+      stats.numEntries -= collected;
+    }
+    if (stats.numEntries > gcLimit / 10 * 9) {
+      gcLimit = stats.numEntries + initialGCLimit;
+    } else if (stats.numEntries < gcLimit / 128) {
+      gcLimit = std::max(initialGCLimit, gcLimit / 2);
+    }
   }
-  return before - stats.numEntries;
+  return collected;
 }
 
 void RealNumberUniqueTable::clear() noexcept {
-  // clear table buckets
-  for (auto& bucket : table) {
-    bucket = nullptr;
+  for (std::size_t key = 0; key < table.size(); ++key) {
+    std::unique_lock<std::mutex> bucketGuard(bucketLocks[key]);
+    table[key] = nullptr;
+    tailTable[key] = nullptr;
   }
-  for (auto& entry : tailTable) {
-    entry = nullptr;
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    gcLimit = initialGCLimit;
+    stats.reset();
   }
-  gcLimit = initialGCLimit;
-  stats.reset();
 }
 
 void RealNumberUniqueTable::print() const {
@@ -231,14 +269,20 @@ std::ostream& RealNumberUniqueTable::printBucketDistribution(std::ostream& os) {
 
 std::size_t RealNumberUniqueTable::countMarkedEntries() const noexcept {
   std::size_t count = 0U;
-  for (const auto* bucket : table) {
-    const auto* curr = bucket;
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:count) default(none) shared(table, bucketLocks)
+#endif
+  for (std::size_t key = 0; key < table.size(); ++key) {
+    std::unique_lock<std::mutex> bucketGuard(bucketLocks[key]);
+    const auto* curr = table[key];
+    std::size_t local = 0U;
     while (curr != nullptr) {
       if (RealNumber::isMarked(curr)) {
-        ++count;
+        ++local;
       }
       curr = curr->next();
     }
+    count += local;
   }
   return count;
 }
@@ -253,23 +297,35 @@ RealNumber* RealNumberUniqueTable::findOrInsert(const std::int64_t key,
     entry->setNext(curr);
     table[k] = entry;
     tailTable[k] = entry;
-    stats.trackInsert();
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      stats.trackInsert();
+    }
     return entry;
   }
 
   auto* back = tailTable[k];
   if (back != nullptr && back->value <= val) {
     if (RealNumber::approximatelyEquals(val, back->value)) {
-      ++stats.hits;
+      {
+        std::lock_guard<std::mutex> statsGuard(statsMutex);
+        ++stats.hits;
+      }
       return back;
     }
-    ++stats.collisions;
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      ++stats.collisions;
+    }
     auto* entry = memoryManager->get<RealNumber>();
     entry->value = val;
     entry->setNext(nullptr);
     back->setNext(entry);
     tailTable[k] = entry;
-    stats.trackInsert();
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      stats.trackInsert();
+    }
     return entry;
   }
 
@@ -287,15 +343,24 @@ RealNumber* RealNumberUniqueTable::findOrInsert(const std::int64_t key,
           const auto diffToNext = std::abs(next->value - val);
           // val is actually closer to next than to curr
           if (diffToNext < diffToCurr) {
-            ++stats.hits;
+            {
+              std::lock_guard<std::mutex> statsGuard(statsMutex);
+              ++stats.hits;
+            }
             return next;
           }
         }
       }
-      ++stats.hits;
+      {
+        std::lock_guard<std::mutex> statsGuard(statsMutex);
+        ++stats.hits;
+      }
       return curr;
     }
-    ++stats.collisions;
+    {
+      std::lock_guard<std::mutex> statsGuard(statsMutex);
+      ++stats.collisions;
+    }
     prev = curr;
     curr = curr->next();
   }
@@ -313,7 +378,10 @@ RealNumber* RealNumberUniqueTable::findOrInsert(const std::int64_t key,
   if (curr == nullptr) {
     tailTable[k] = entry;
   }
-  stats.trackInsert();
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    stats.trackInsert();
+  }
   return entry;
 }
 
@@ -322,13 +390,17 @@ RealNumber* RealNumberUniqueTable::insertFront(const std::int64_t key,
   auto* entry = memoryManager->get<RealNumber>();
   entry->value = val;
 
-  auto* curr = table[static_cast<std::size_t>(key)];
-  table[static_cast<std::size_t>(key)] = entry;
+  const auto k = static_cast<std::size_t>(key);
+  auto* curr = table[k];
+  table[k] = entry;
   entry->setNext(curr);
   if (curr == nullptr) {
-    tailTable[static_cast<std::size_t>(key)] = entry;
+    tailTable[k] = entry;
   }
-  stats.trackInsert();
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    stats.trackInsert();
+  }
   return entry;
 }
 
@@ -338,14 +410,18 @@ RealNumber* RealNumberUniqueTable::insertBack(const std::int64_t key,
   entry->value = val;
   entry->setNext(nullptr);
 
-  auto* back = tailTable[static_cast<std::size_t>(key)];
-  tailTable[static_cast<std::size_t>(key)] = entry;
+  const auto k = static_cast<std::size_t>(key);
+  auto* back = tailTable[k];
+  tailTable[k] = entry;
   if (back == nullptr) {
-    table[static_cast<std::size_t>(key)] = entry;
+    table[k] = entry;
   } else {
     back->setNext(entry);
   }
-  stats.trackInsert();
+  {
+    std::lock_guard<std::mutex> statsGuard(statsMutex);
+    stats.trackInsert();
+  }
   return entry;
 }
 

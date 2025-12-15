@@ -28,6 +28,8 @@ MemoryManager::MemoryManager(size_t entrySize,
 }
 
 LLBase* MemoryManager::get() {
+  std::lock_guard<std::mutex> guard(mutex_);
+
   if (entryAvailableForReuse()) {
     return getEntryFromAvailableList();
   }
@@ -40,12 +42,16 @@ LLBase* MemoryManager::get() {
 }
 
 void MemoryManager::returnEntry(LLBase& entry) noexcept {
+  std::lock_guard<std::mutex> guard(mutex_);
+
   entry.setNext(available);
   available = &entry;
   stats.trackReturnedEntry();
 }
 
 void MemoryManager::reset(const bool resizeToTotal) noexcept {
+  std::lock_guard<std::mutex> guard(mutex_);
+
   available = nullptr;
 
   auto numAllocations = stats.numAllocations;

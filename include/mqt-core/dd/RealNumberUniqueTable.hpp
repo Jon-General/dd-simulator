@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
 
 namespace dd {
 
@@ -175,6 +176,12 @@ private:
   std::size_t initialGCLimit;
   /// The current garbage collection limit
   std::size_t gcLimit = initialGCLimit;
+
+  /// Mutex protecting updates to statistics and GC limit
+  mutable std::mutex statsMutex{};
+
+  /// Bucket-level locks to allow concurrent access
+  mutable std::array<std::mutex, NBUCKET> bucketLocks{};
 
   /**
    * @brief Finds or inserts a value into the bucket indexed by key.

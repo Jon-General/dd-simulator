@@ -25,7 +25,10 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
+#include <shared_mutex>
 #include <type_traits>
 #include <vector>
 
@@ -108,19 +111,36 @@ public:
 
     const auto key = hash(*p);
     const auto v = p->v;
-    ++stats[v].lookups;
 
-    // search bucket in table corresponding to hashed value for the given node
-    // and return it if found.
-    if (auto* hashedNode = searchTable(*p, key);
-        !Node::isTerminal(hashedNode)) {
-      return hashedNode;
+    std::shared_lock tableLock(tableMutex);
+    auto& bucketLock = *bucketLocks.at(v).at(key);
+    std::lock_guard<std::mutex> bucketGuard(bucketLock);
+
+    const auto result = searchTable(*p, key);
+
+    {
+      auto& statLock = *statsLocks.at(v);
+      std::lock_guard<std::mutex> statsGuard(statLock);
+      ++stats[v].lookups;
+      stats[v].collisions += result.collisions;
+      if (result.hit) {
+        ++stats[v].hits;
+      }
+    }
+
+    if (result.hit) {
+      return result.node;
     }
 
     // if node not found -> add it to front of unique table bucket
     p->setNext(tables[v][key]);
     tables[v][key] = p;
-    stats[v].trackInsert();
+
+    {
+      auto& statLock = *statsLocks.at(v);
+      std::lock_guard<std::mutex> statsGuard(statLock);
+      stats[v].trackInsert();
+    }
 
     return p;
   }
@@ -131,9 +151,8 @@ public:
   /// Get a reference to the statistics
   [[nodiscard]] const auto& getStats() const noexcept { return stats; }
 
-  /// Get a reference to individual statistics
-  [[nodiscard]] const UniqueTableStatistics&
-  getStats(std::size_t idx) const noexcept;
+  /// Get statistics snapshot for individual variable
+  [[nodiscard]] UniqueTableStatistics getStats(std::size_t idx) const noexcept;
 
   /// Get a JSON object with the statistics
   [[nodiscard]] nlohmann::basic_json<>
@@ -190,6 +209,15 @@ private:
   /// Typedef for the table
   using Table = std::vector<Bucket>;
 
+  template <class Node> struct LookupResult {
+    Node* node;
+    std::size_t collisions;
+    bool hit;
+  };
+
+  void initializeLocks();
+  [[nodiscard]] std::size_t getNumEntriesLocked() const noexcept;
+
   UniqueTableConfig cfg;
 
   /// The current garbage collection limit
@@ -209,6 +237,15 @@ private:
   /// A collection of statistics
   std::vector<UniqueTableStatistics> stats;
 
+  /// Protect structural modifications to the tables and lock arrays
+  mutable std::shared_mutex tableMutex{};
+
+  /// Per-variable bucket locks (one mutex per bucket)
+  std::vector<std::vector<std::unique_ptr<std::mutex>>> bucketLocks{};
+
+  /// Per-variable mutexes used to guard statistics updates
+  std::vector<std::unique_ptr<std::mutex>> statsLocks{};
+
   /**
    * @brief Search for a node in the hash table with the given key.
    * @param p The node to search for.
@@ -216,11 +253,13 @@ private:
    * @returns A pointer to the node if found or Node::getTerminal() otherwise.
    */
   template <class Node>
-  [[nodiscard]] Node* searchTable(Node& p, const std::size_t& key) {
+  [[nodiscard]] LookupResult<Node> searchTable(Node& p,
+                                               const std::size_t& key) {
     static_assert(std::is_base_of_v<NodeBase, Node>,
                   "Node must be derived from NodeBase");
     const auto v = p.v;
     Node* bucket = static_cast<Node*>(tables[v][key]);
+    std::size_t collisions = 0U;
     while (bucket != nullptr) {
       if (nodesAreEqual(p, *bucket)) {
         // Match found
@@ -228,15 +267,14 @@ private:
           // put node pointed to by p on available chain
           memoryManager->returnEntry(p);
         }
-        ++stats[v].hits;
-        return bucket;
+        return {bucket, collisions, true};
       }
-      ++stats[v].collisions;
+      ++collisions;
       bucket = bucket->next();
     }
 
     // Node not found in bucket
-    return Node::getTerminal();
+    return {Node::getTerminal(), collisions, false};
   }
 };
 
