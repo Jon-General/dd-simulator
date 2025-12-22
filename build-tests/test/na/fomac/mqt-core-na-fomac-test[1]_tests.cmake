@@ -1,0 +1,5 @@
+add_test([=[TestNAFoMaC.TrapsJSONRoundTrip]=]  /workspaces/dd-simulator/build-tests/test/na/fomac/mqt-core-na-fomac-test [==[--gtest_filter=TestNAFoMaC.TrapsJSONRoundTrip]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[TestNAFoMaC.TrapsJSONRoundTrip]=]  PROPERTIES WORKING_DIRECTORY /workspaces/dd-simulator/test/na/fomac SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==] VS_DEBUGGER_WORKING_DIRECTORY /workspaces/dd-simulator/test/na/fomac)
+add_test([=[TestNAFoMaC.FullJSONRoundTrip]=]  /workspaces/dd-simulator/build-tests/test/na/fomac/mqt-core-na-fomac-test [==[--gtest_filter=TestNAFoMaC.FullJSONRoundTrip]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[TestNAFoMaC.FullJSONRoundTrip]=]  PROPERTIES WORKING_DIRECTORY /workspaces/dd-simulator/test/na/fomac SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==] VS_DEBUGGER_WORKING_DIRECTORY /workspaces/dd-simulator/test/na/fomac)
+set(  mqt-core-na-fomac-test_TESTS TestNAFoMaC.TrapsJSONRoundTrip TestNAFoMaC.FullJSONRoundTrip)

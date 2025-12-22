@@ -19,10 +19,14 @@
 #include "dd/statistics/TableStatistics.hpp"
 #include "ir/Definitions.hpp"
 
+#include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 namespace dd {
@@ -39,6 +43,8 @@ public:
   /// Default number of buckets for the compute table
   static constexpr std::size_t DEFAULT_NUM_BUCKETS = 16384U;
 
+  enum class BucketState : std::uint8_t { Empty = 0, Writing, Ready };
+
   /**
    * Default constructor
    * @param numBuckets Number of hash table buckets. Must be a power of two.
@@ -50,8 +56,11 @@ public:
     }
     stats.entrySize = sizeof(Entry);
     stats.numBuckets = numBuckets;
-    valid = std::vector(numBuckets, false);
     table = std::vector<Entry>(numBuckets);
+    states = std::vector<std::atomic<BucketState>>(numBuckets);
+    for (auto& state : states) {
+      state.store(BucketState::Empty, std::memory_order_relaxed);
+    }
   }
 
   /**
@@ -108,13 +117,36 @@ public:
   void insert(const LeftOperandType& leftOperand,
               const RightOperandType& rightOperand, const ResultType& result) {
     const auto key = hash(leftOperand, rightOperand);
-    if (valid[key]) {
+
+    bool collision = false;
+
+    while (true) {
+      auto expected = BucketState::Empty;
+      if (states[key].compare_exchange_strong(expected, BucketState::Writing,
+                                               std::memory_order_acq_rel)) {
+        table[key] = {leftOperand, rightOperand, result};
+        states[key].store(BucketState::Ready, std::memory_order_release);
+        break;
+      }
+
+      expected = BucketState::Ready;
+      if (states[key].compare_exchange_strong(expected, BucketState::Writing,
+                                               std::memory_order_acq_rel)) {
+        collision = true;
+        table[key] = {leftOperand, rightOperand, result};
+        states[key].store(BucketState::Ready, std::memory_order_release);
+        break;
+      }
+
+      std::this_thread::yield();
+    }
+
+    std::scoped_lock statsLock(statsMutex);
+    if (collision) {
       ++stats.collisions;
     } else {
       stats.trackInsert();
-      valid[key] = true;
     }
-    table[key] = {leftOperand, rightOperand, result};
   }
 
   /**
@@ -128,13 +160,19 @@ public:
                      const RightOperandType& rightOperand,
                      [[maybe_unused]] const bool useDensityMatrix = false) {
     ResultType* result = nullptr;
-    ++stats.lookups;
+    {
+      std::scoped_lock statsLock(statsMutex);
+      ++stats.lookups;
+    }
     const auto key = hash(leftOperand, rightOperand);
-    if (!valid[key]) {
+    if (states[key].load(std::memory_order_acquire) != BucketState::Ready) {
       return result;
     }
 
     auto& entry = table[key];
+    if (states[key].load(std::memory_order_acquire) != BucketState::Ready) {
+      return result;
+    }
     if (entry.leftOperand != leftOperand) {
       return result;
     }
@@ -153,7 +191,10 @@ public:
         return result;
       }
     }
-    ++stats.hits;
+    {
+      std::scoped_lock statsLock(statsMutex);
+      ++stats.hits;
+    }
     return &entry.result;
   }
 
@@ -161,7 +202,11 @@ public:
    * @brief Clear the compute table
    * @details Sets all entries to invalid.
    */
-  void clear() { valid = std::vector(stats.numBuckets, false); }
+  void clear() {
+    for (auto& state : states) {
+      state.store(BucketState::Empty, std::memory_order_relaxed);
+    }
+  }
 
   /**
    * @brief Print the statistics of the compute table
@@ -175,8 +220,10 @@ public:
 private:
   /// The actual table storing the entries
   std::vector<Entry> table;
-  /// Dynamic bitset to mark valid entries
-  std::vector<bool> valid;
+  /// Per-bucket state to allow lock-free access
+  std::vector<std::atomic<BucketState>> states;
+  /// Protects statistics updates
+  mutable std::mutex statsMutex;
   /// Statistics of the compute table
   TableStatistics stats{};
 };

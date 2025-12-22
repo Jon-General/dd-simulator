@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/algorithms/mqt-core-algorithms-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/algorithms/mqt-core-algorithms-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-algorithms-test_NOT_BUILT mqt-core-algorithms-test_NOT_BUILT)
+endif()

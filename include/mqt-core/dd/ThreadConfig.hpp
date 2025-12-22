@@ -4,31 +4,12 @@
  * All rights reserved.
  *
  * SPDX-License-Identifier: MIT
-<<<<<<< HEAD
-=======
  *
  * Licensed under the MIT License
->>>>>>> 413c2c13 (test)
  */
 
 #pragma once
 
-<<<<<<< HEAD
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
-namespace dd {
-inline void configureOpenMPThreads(const int desiredThreads) {
-#ifdef _OPENMP
-  if (desiredThreads > 0) {
-    omp_set_num_threads(desiredThreads);
-  }
-#else
-  (void)desiredThreads;
-#endif
-}
-=======
 namespace dd {
 
 /**
@@ -50,5 +31,4 @@ int resolveOpenMPThreadCount(int requested) noexcept;
  */
 void configureOpenMPThreads(int requested) noexcept;
 
->>>>>>> 413c2c13 (test)
 } // namespace dd

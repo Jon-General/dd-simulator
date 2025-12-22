@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-na-fomac.a "CMakeFiles/mqt-core-na-fomac.dir/Device.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-na-fomac.a

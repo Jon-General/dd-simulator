@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/qir/runtime/mqt-core-qir-runtime-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/qir/runtime/mqt-core-qir-runtime-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-qir-runtime-test_NOT_BUILT mqt-core-qir-runtime-test_NOT_BUILT)
+endif()

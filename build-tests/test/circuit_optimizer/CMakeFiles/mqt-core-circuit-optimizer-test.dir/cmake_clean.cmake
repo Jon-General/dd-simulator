@@ -1,0 +1,40 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_backpropagate_output_permutation.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_backpropagate_output_permutation.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_cancel_cnots.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_cancel_cnots.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_collect_blocks.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_collect_blocks.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_collect_clifford_blocks.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_collect_clifford_blocks.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_decompose_swap.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_decompose_swap.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_defer_measurements.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_defer_measurements.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_elide_permutations.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_elide_permutations.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_eliminate_resets.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_eliminate_resets.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_flatten_operations.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_flatten_operations.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_diagonal_gates_before_measure.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_diagonal_gates_before_measure.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_final_measurements.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_final_measurements.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_operation.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_remove_operation.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_replace_mcx_with_mcz.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_replace_mcx_with_mcz.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_single_qubit_gate_fusion.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_single_qubit_gate_fusion.cpp.o.d"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_swap_reconstruction.cpp.o"
+  "CMakeFiles/mqt-core-circuit-optimizer-test.dir/test_swap_reconstruction.cpp.o.d"
+  "mqt-core-circuit-optimizer-test"
+  "mqt-core-circuit-optimizer-test.pdb"
+  "mqt-core-circuit-optimizer-test[1]_tests.cmake"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/mqt-core-circuit-optimizer-test.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

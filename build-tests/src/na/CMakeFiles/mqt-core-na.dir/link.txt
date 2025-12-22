@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-na.a "CMakeFiles/mqt-core-na.dir/NAComputation.cpp.o" "CMakeFiles/mqt-core-na.dir/entities/Zone.cpp.o" "CMakeFiles/mqt-core-na.dir/operations/GlobalOp.cpp.o" "CMakeFiles/mqt-core-na.dir/operations/LoadOp.cpp.o" "CMakeFiles/mqt-core-na.dir/operations/LocalOp.cpp.o" "CMakeFiles/mqt-core-na.dir/operations/MoveOp.cpp.o" "CMakeFiles/mqt-core-na.dir/operations/StoreOp.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-na.a

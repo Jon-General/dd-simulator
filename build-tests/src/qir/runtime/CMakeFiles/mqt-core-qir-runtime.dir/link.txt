@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-qir-runtime.a "CMakeFiles/mqt-core-qir-runtime.dir/QIR.cpp.o" "CMakeFiles/mqt-core-qir-runtime.dir/Runtime.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-qir-runtime.a

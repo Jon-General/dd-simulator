@@ -1,0 +1,3 @@
+/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/qdmi-populate.dir
+/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/edit_cache.dir
+/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/rebuild_cache.dir

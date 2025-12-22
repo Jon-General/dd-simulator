@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects -shared -Wl,-soname,libmqt-core-qdmi-na-device-dyn.so.0.0 -o libmqt-core-qdmi-na-device-dyn.so.0.0.0 "CMakeFiles/mqt-core-qdmi-na-device-dyn.dir/DynDevice.cpp.o"  -Wl,-rpath,"\$ORIGIN:\$ORIGIN/lib:\$ORIGIN/../lib" libmqt-core-qdmi-na-device.a ../libmqt-core-qdmi-common.a ../../../_deps/spdlog-build/libspdlog.a 

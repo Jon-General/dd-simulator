@@ -19,6 +19,17 @@
 #include <complex>
 #include <cstddef>
 
+namespace {
+[[nodiscard]] inline dd::fp roundToTolerance(const dd::fp value) noexcept {
+  const auto tol = dd::RealNumber::eps;
+  if (std::abs(value) < tol) {
+    return 0.F;
+  }
+  const auto scaled = std::nearbyint(value / tol);
+  return scaled * tol;
+}
+} // namespace
+
 namespace dd {
 
 void ComplexNumbers::setTolerance(fp tol) noexcept { RealNumber::eps = tol; }
@@ -64,11 +75,15 @@ Complex ComplexNumbers::lookup(const ComplexValue& c) {
 }
 
 Complex ComplexNumbers::lookup(const fp r) {
-  return {.r = uniqueTable->lookup(r), .i = &constants::zero};
+  const auto roundedR = roundToTolerance(r);
+  return {.r = uniqueTable->lookup(roundedR), .i = &constants::zero};
 }
 
 Complex ComplexNumbers::lookup(const fp r, const fp i) {
-  return {.r = uniqueTable->lookup(r), .i = uniqueTable->lookup(i)};
+  const auto roundedR = roundToTolerance(r);
+  const auto roundedI = roundToTolerance(i);
+  return {.r = uniqueTable->lookup(roundedR),
+          .i = uniqueTable->lookup(roundedI)};
 }
 
 std::size_t ComplexNumbers::realCount() const noexcept {

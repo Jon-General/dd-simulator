@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-qdmi-na-device.a "CMakeFiles/mqt-core-qdmi-na-device.dir/Device.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-qdmi-na-device.a

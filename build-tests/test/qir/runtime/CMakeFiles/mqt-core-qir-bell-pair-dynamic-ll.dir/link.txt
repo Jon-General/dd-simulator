@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects BellPairDynamic.o -o mqt-core-qir-bell-pair-dynamic-ll  -Wl,-rpath,"\$ORIGIN:\$ORIGIN/lib:\$ORIGIN/../lib" ../../../src/qir/runtime/libmqt-core-qir-runtime.a ../../../src/dd/libmqt-core-dd.a ../../../src/ir/libmqt-core-ir.a /usr/lib/gcc/x86_64-linux-gnu/13/libgomp.so /usr/lib/x86_64-linux-gnu/libpthread.a 

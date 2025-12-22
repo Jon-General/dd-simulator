@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/qdmi-populate"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/qdmi-populate.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/CMakeFiles/qdmi-populate-complete.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-build.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-configure.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-download.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-install.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-mkdir.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-patch.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-test.rule"
+		},
+		{
+			"file" : "/workspaces/dd-simulator/build-tests/_deps/qdmi-subbuild/qdmi-populate-prefix/src/qdmi-populate-stamp/qdmi-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"qdmi-populate"
+		],
+		"name" : "qdmi-populate"
+	}
+}

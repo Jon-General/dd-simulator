@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects "CMakeFiles/mqt-core-qdmi-na-device-generator.dir/App.cpp.o" -o ../../../bin/mqt-core-qdmi-na-device-generator-0.0.0  -Wl,-rpath,"\$ORIGIN:\$ORIGIN/lib:\$ORIGIN/../lib" libmqt-core-qdmi-na-device-gen.a ../../../_deps/spdlog-build/libspdlog.a 

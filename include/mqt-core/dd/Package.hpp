@@ -51,6 +51,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace dd {
 
 /**
@@ -1111,6 +1115,25 @@ public:
       if (!y.isTerminal() && y.p->v > var) {
         var = y.p->v;
       }
+
+#ifdef _OPENMP
+      const bool allowParallelTasks =
+          config_.parallelOperationTasks &&
+          static_cast<std::size_t>(var) >=
+              config_.minQubitsForTaskParallelism;
+      if (allowParallelTasks) {
+        CachedEdge<RightOperandNode> parallelResult{};
+
+#pragma omp parallel
+        {
+#pragma omp single
+          { parallelResult = multiply2(x, y, var); }
+        }
+
+        return cn.lookup(parallelResult);
+      }
+#endif
+
       const auto e = multiply2(x, y, var);
       return cn.lookup(e);
     }
@@ -1190,38 +1213,51 @@ private:
     constexpr std::size_t rows = RADIX;
     constexpr std::size_t cols = n == NEDGE ? RADIX : 1U;
 
+    constexpr bool supportsParallelTasks =
+        !std::is_same_v<LeftOperandNode, dNode>;
+#ifdef _OPENMP
+    [[maybe_unused]] const bool allowTasks =
+        supportsParallelTasks && config_.parallelOperationTasks &&
+        static_cast<std::size_t>(var) >=
+            config_.minQubitsForTaskParallelism &&
+        omp_in_parallel();
+#else
+    [[maybe_unused]] const bool allowTasks = false;
+#endif
+
     std::array<ResultEdge, n> edge{};
-    for (auto i = 0U; i < rows; i++) {
-      for (auto j = 0U; j < cols; j++) {
-        auto idx = (cols * i) + j;
-        edge[idx] = ResultEdge::zero();
-        for (auto k = 0U; k < rows; k++) {
-          const auto xIdx = (rows * i) + k;
-          LEdge e1{};
-          if (x.p != nullptr && x.p->v == var) {
-            e1 = x.p->e[xIdx];
-          } else {
-            if (xIdx == 0 || xIdx == 3) {
-              e1 = LEdge{x.p, Complex::one()};
-            } else {
-              e1 = LEdge::zero();
-            }
-          }
 
-          const auto yIdx = j + (cols * k);
-          REdge e2{};
-          if (y.p != nullptr && y.p->v == var) {
-            e2 = y.p->e[yIdx];
-          } else {
-            if (yIdx == 0 || yIdx == 3) {
-              e2 = REdge{y.p, Complex::one()};
+    if constexpr (std::is_same_v<LeftOperandNode, dNode>) {
+      for (auto i = 0U; i < rows; i++) {
+        for (auto j = 0U; j < cols; j++) {
+          auto idx = (cols * i) + j;
+          edge[idx] = ResultEdge::zero();
+          for (auto k = 0U; k < rows; k++) {
+            const auto xIdx = (rows * i) + k;
+            LEdge e1{};
+            if (x.p != nullptr && x.p->v == var) {
+              e1 = x.p->e[xIdx];
             } else {
-              e2 = REdge::zero();
+              if (xIdx == 0 || xIdx == 3) {
+                e1 = LEdge{x.p, Complex::one()};
+              } else {
+                e1 = LEdge::zero();
+              }
             }
-          }
 
-          const auto v = static_cast<Qubit>(var - 1);
-          if constexpr (std::is_same_v<LeftOperandNode, dNode>) {
+            const auto yIdx = j + (cols * k);
+            REdge e2{};
+            if (y.p != nullptr && y.p->v == var) {
+              e2 = y.p->e[yIdx];
+            } else {
+              if (yIdx == 0 || yIdx == 3) {
+                e2 = REdge{y.p, Complex::one()};
+              } else {
+                e2 = REdge::zero();
+              }
+            }
+
+            const auto v = static_cast<Qubit>(var - 1);
             dCachedEdge m;
             dEdge::applyDmChangesToEdges(e1, e2);
             if (!generateDensityMatrix || idx == 1) {
@@ -1255,14 +1291,69 @@ private:
             }
             // Undo modifications on density matrices
             dEdge::revertDmChangesToEdges(e1, e2);
+          }
+        }
+      }
+    } else {
+      auto computeEdge = [&](const auto i, const auto j) {
+        const auto idx = (cols * i) + j;
+        auto accum = ResultEdge::zero();
+        for (auto k = 0U; k < rows; k++) {
+          const auto xIdx = (rows * i) + k;
+          LEdge e1{};
+          if (x.p != nullptr && x.p->v == var) {
+            e1 = x.p->e[xIdx];
           } else {
-            auto m = multiply2(e1, e2, v);
-
-            if (k == 0 || edge[idx].w.exactlyZero()) {
-              edge[idx] = m;
-            } else if (!m.w.exactlyZero()) {
-              edge[idx] = add2(edge[idx], m, v);
+            if (xIdx == 0 || xIdx == 3) {
+              e1 = LEdge{x.p, Complex::one()};
+            } else {
+              e1 = LEdge::zero();
             }
+          }
+
+          const auto yIdx = j + (cols * k);
+          REdge e2{};
+          if (y.p != nullptr && y.p->v == var) {
+            e2 = y.p->e[yIdx];
+          } else {
+            if (yIdx == 0 || yIdx == 3) {
+              e2 = REdge{y.p, Complex::one()};
+            } else {
+              e2 = REdge::zero();
+            }
+          }
+
+          const auto v = static_cast<Qubit>(var - 1);
+          auto m = multiply2(e1, e2, v);
+
+          if (k == 0 || accum.w.exactlyZero()) {
+            accum = m;
+          } else if (!m.w.exactlyZero()) {
+            accum = add2(accum, m, v);
+          }
+        }
+        edge[idx] = accum;
+      };
+
+#ifdef _OPENMP
+      if (allowTasks) {
+        #pragma omp taskgroup
+        {
+          for (auto i = 0U; i < rows; i++) {
+            for (auto j = 0U; j < cols; j++) {
+              const auto taskI = i;
+              const auto taskJ = j;
+#pragma omp task firstprivate(taskI, taskJ)
+              { computeEdge(taskI, taskJ); }
+            }
+          }
+        }
+      } else
+#endif
+      {
+        for (auto i = 0U; i < rows; i++) {
+          for (auto j = 0U; j < cols; j++) {
+            computeEdge(i, j);
           }
         }
       }

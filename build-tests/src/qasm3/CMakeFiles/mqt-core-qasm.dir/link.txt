@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-qasm.a "CMakeFiles/mqt-core-qasm.dir/Importer.cpp.o" "CMakeFiles/mqt-core-qasm.dir/Parser.cpp.o" "CMakeFiles/mqt-core-qasm.dir/Scanner.cpp.o" "CMakeFiles/mqt-core-qasm.dir/Statement.cpp.o" "CMakeFiles/mqt-core-qasm.dir/Token.cpp.o" "CMakeFiles/mqt-core-qasm.dir/Types.cpp.o" "CMakeFiles/mqt-core-qasm.dir/passes/ConstEvalPass.cpp.o" "CMakeFiles/mqt-core-qasm.dir/passes/TypeCheckPass.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-qasm.a

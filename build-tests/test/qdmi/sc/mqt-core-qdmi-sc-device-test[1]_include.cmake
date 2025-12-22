@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/qdmi/sc/mqt-core-qdmi-sc-device-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/qdmi/sc/mqt-core-qdmi-sc-device-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-qdmi-sc-device-test_NOT_BUILT mqt-core-qdmi-sc-device-test_NOT_BUILT)
+endif()

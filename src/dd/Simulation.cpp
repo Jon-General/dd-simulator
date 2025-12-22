@@ -30,6 +30,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace dd {
 
 std::map<std::string, std::size_t> sample(const qc::QuantumComputation& qc,
@@ -114,11 +118,48 @@ std::map<std::string, std::size_t> sample(const qc::QuantumComputation& qc,
 
     // measure all qubits
     std::map<std::string, std::size_t> counts{};
-    for (std::size_t i = 0U; i < shots; ++i) {
-      // measure all returns a string of the form "q(n-1) ... q(0)"
-      auto measurement = dd.measureAll(e, false, mt);
-      counts.operator[](measurement) += 1U;
+
+#ifdef _OPENMP
+    const auto numThreads = static_cast<std::size_t>(omp_get_max_threads());
+    if (numThreads > 1U && shots > 1U) {
+      std::vector<std::map<std::string, std::size_t>> localCounts(numThreads);
+      std::vector<std::mt19937_64> threadRng(numThreads);
+
+      // derive per-thread seeds deterministically from the base RNG state
+      for (std::size_t t = 0U; t < numThreads; ++t) {
+        threadRng[t].seed(mt());
+      }
+
+#pragma omp parallel
+      {
+        const auto tid = static_cast<std::size_t>(omp_get_thread_num());
+        auto& local = localCounts[tid];
+        auto& rng = threadRng[tid];
+
+#pragma omp for schedule(static)
+        for (std::size_t i = 0U; i < shots; ++i) {
+          // measureAll returns a string of the form "q(n-1) ... q(0)"
+          const auto measurement = dd.measureAll(e, false, rng);
+          local[measurement] += 1U;
+        }
+      }
+
+      // merge thread-local results
+      for (const auto& local : localCounts) {
+        for (const auto& [measurement, count] : local) {
+          counts[measurement] += count;
+        }
+      }
+    } else {
+#endif
+      for (std::size_t i = 0U; i < shots; ++i) {
+        const auto measurement = dd.measureAll(e, false, mt);
+        counts[measurement] += 1U;
+      }
+#ifdef _OPENMP
     }
+#endif
+
     // reduce reference count of measured state
     dd.decRef(e);
 

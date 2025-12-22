@@ -10,6 +10,7 @@
 
 #include "dd/CachedEdge.hpp"
 #include "dd/DDDefinitions.hpp"
+#include "dd/DDpackageConfig.hpp"
 #include "dd/Node.hpp"
 #include "dd/Operations.hpp"
 #include "dd/Package.hpp"
@@ -100,8 +101,22 @@ void registerDDPackage(const py::module& mod) {
   auto dd =
       py::class_<dd::Package, std::unique_ptr<dd::Package>>(mod, "DDPackage");
 
-  // Constructor
+  // Constructors
   dd.def(py::init<size_t>(), "num_qubits"_a = dd::Package::DEFAULT_QUBITS);
+
+  // Constructor with optional OpenMP thread configuration
+  dd.def(
+      py::init([](size_t numQubits, int ompThreads) {
+        dd::DDPackageConfig cfg{};
+        cfg.ompThreads = ompThreads;
+        return std::make_unique<dd::Package>(numQubits, cfg);
+      }),
+      "num_qubits"_a = dd::Package::DEFAULT_QUBITS,
+      "omp_threads"_a = 0,
+      R"pbdoc(Create a DDPackage with a desired OpenMP thread count.
+
+Setting `omp_threads` to a positive value requests that many threads;
+zero or a negative value means: use all available cores (default).)pbdoc");
 
   // Resizing the package
   dd.def("resize", &dd::Package::resize, "num_qubits"_a);

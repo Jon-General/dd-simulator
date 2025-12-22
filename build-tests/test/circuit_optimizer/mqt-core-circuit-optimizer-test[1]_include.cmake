@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/circuit_optimizer/mqt-core-circuit-optimizer-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/circuit_optimizer/mqt-core-circuit-optimizer-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-circuit-optimizer-test_NOT_BUILT mqt-core-circuit-optimizer-test_NOT_BUILT)
+endif()

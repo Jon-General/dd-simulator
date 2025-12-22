@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/na/fomac/mqt-core-na-fomac-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/na/fomac/mqt-core-na-fomac-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-na-fomac-test_NOT_BUILT mqt-core-na-fomac-test_NOT_BUILT)
+endif()

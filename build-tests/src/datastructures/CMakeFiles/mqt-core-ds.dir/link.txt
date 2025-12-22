@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libmqt-core-ds.a "CMakeFiles/mqt-core-ds.dir/Layer.cpp.o"
+"/usr/bin/gcc-ranlib-13" libmqt-core-ds.a

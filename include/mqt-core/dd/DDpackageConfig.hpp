@@ -42,6 +42,12 @@ struct DDPackageConfig {
   /// Desired number of OpenMP threads (<= 0 means use all available)
   int ompThreads = 0;
 
+  /// Enable OpenMP task-based recursion for DD multiply/apply
+  bool parallelOperationTasks = true;
+
+  /// Minimum qubit index (depth) before spawning tasks in multiply recursion
+  std::size_t minQubitsForTaskParallelism = 6U;
+
   // The number of different quantum operations. i.e., the number of operations
   // defined in OpType.hpp. This parameter is required to initialize the
   // StochasticNoiseOperationTable.hpp

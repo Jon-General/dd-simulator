@@ -1,0 +1,5 @@
+if(EXISTS "/workspaces/dd-simulator/build-tests/test/ir/mqt-core-ir-test[1]_tests.cmake")
+  include("/workspaces/dd-simulator/build-tests/test/ir/mqt-core-ir-test[1]_tests.cmake")
+else()
+  add_test(mqt-core-ir-test_NOT_BUILT mqt-core-ir-test_NOT_BUILT)
+endif()

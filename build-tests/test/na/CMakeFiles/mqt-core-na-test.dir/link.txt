@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects "CMakeFiles/mqt-core-na-test.dir/test_nacomputation.cpp.o" -o mqt-core-na-test  -Wl,-rpath,"\$ORIGIN:\$ORIGIN/lib:\$ORIGIN/../lib" ../../src/na/libmqt-core-na.a ../../lib/libgmock.a ../../lib/libgtest_main.a ../../src/qasm3/libmqt-core-qasm.a ../../lib/libgtest.a ../../src/ir/libmqt-core-ir.a 
