@@ -103,6 +103,21 @@ For details on how to build the project, please refer to the [documentation](htt
 Building (and running) is continuously tested under Linux, macOS, and Windows using the [latest available system versions for GitHub Actions](https://github.com/actions/runner-images).
 MQT Core is compatible with all [officially supported Python versions](https://devguide.python.org/versions/).
 
+### Building from Source
+
+If you want to build locally (e.g., for development or maximum performance), the basic CMake flow is:
+
+```console
+$ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+$ cmake --build build
+```
+
+Run the C++ test suite after building:
+
+```console
+$ ctest --test-dir build --output-on-failure
+```
+
 The project relies on some external dependencies:
 
 - [boost/multiprecision](https://github.com/boostorg/multiprecision): A library for multiprecision arithmetic (used in the ZX package).
