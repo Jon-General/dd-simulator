@@ -8,6 +8,12 @@
  * Licensed under the MIT License
  */
 
+/* Additional modifications by Jul Jon General
+ * UP Diliman - Department of Computer Science
+ * Logic & Computability Laboratory
+ * 2025
+ */
+
 #include "dd/Operations.hpp"
 
 #include "dd/Complex.hpp"

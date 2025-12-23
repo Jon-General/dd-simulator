@@ -5,6 +5,11 @@
 # SPDX-License-Identifier: MIT
 #
 # Licensed under the MIT License
+#
+# Additional modifications by Jul Jon General
+# UP Diliman - Department of Computer Science
+# Logic & Computability Laboratory
+# 2025
 
 if(NOT TARGET ${MQT_CORE_TARGET_NAME}-dd)
   # collect headers and source files
